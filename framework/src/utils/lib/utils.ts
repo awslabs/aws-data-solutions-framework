@@ -4,7 +4,8 @@
 
 import { createHmac } from 'crypto';
 import * as fs from 'fs';
-import { Stack } from 'aws-cdk-lib';
+import { DefaultStackSynthesizer, Fn, Stack } from 'aws-cdk-lib';
+import { IRole, Role } from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import * as yaml from 'js-yaml';
 
@@ -108,5 +109,14 @@ export class Utils {
   public static validateAccountId(accountId: string): boolean {
     const accountIdRegex = /^\d{12}$/;
     return accountIdRegex.test(accountId);
+  }
+
+  /**
+   * Get CDK deployment role
+   */
+  public static getCdkDeploymentRole(scope: Construct): IRole {
+    const stack = Stack.of(scope);
+    const synthesizer = stack.synthesizer as DefaultStackSynthesizer;
+    return Role.fromRoleArn(scope, 'CdkRole', Fn.sub(synthesizer.cloudFormationExecutionRoleArn));
   }
 }

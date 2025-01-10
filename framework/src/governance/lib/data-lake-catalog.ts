@@ -7,7 +7,8 @@ import { Construct } from 'constructs';
 import { DataCatalogDatabase } from './data-catalog-database';
 import { DataLakeCatalogProps } from './data-lake-catalog-props';
 import { AnalyticsBucket } from '../../storage';
-import { Context, TrackedConstruct, TrackedConstructProps } from '../../utils';
+import { Context, PermissionModel, TrackedConstruct, TrackedConstructProps } from '../../utils';
+import { IRole, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 
 /**
 * Creates a Data Lake Catalog on top of a `DataLakeStorage`.
@@ -64,6 +65,22 @@ export class DataLakeCatalog extends TrackedConstruct {
       });
     }
 
+    let dataAccessRole : IRole | undefined = undefined;
+    let configurationRole : IRole | undefined = undefined;
+
+    if (props.permissionModel === PermissionModel.LAKE_FORMATION || props.permissionModel === PermissionModel.HYBRID) {
+      dataAccessRole = props.lakeFormationDataAccessRole || new Role(this, 'LakeFormationDataAccessRole', {
+        assumedBy: new ServicePrincipal('lakeformation.amazonaws.com'),
+      });
+      props.dataLakeStorage.bronzeBucket.grantReadWrite(dataAccessRole);
+      props.dataLakeStorage.silverBucket.grantReadWrite(dataAccessRole);
+      props.dataLakeStorage.goldBucket.grantReadWrite(dataAccessRole);
+
+      configurationRole = props.lakeFormationConfigurationRole || new Role(this, 'LakeFormationConfigurationRole', {
+        assumedBy: new ServicePrincipal('lamnda')
+      });
+    }
+
     const extractedBronzeBucketName = this.extractBucketName(props.dataLakeStorage.bronzeBucket);
     const extractedSilverBucketName = this.extractBucketName(props.dataLakeStorage.silverBucket);
     const extractedGoldBucketName = this.extractBucketName(props.dataLakeStorage.goldBucket);
@@ -83,6 +100,9 @@ export class DataLakeCatalog extends TrackedConstruct {
       crawlerLogEncryptionKey: this.crawlerLogEncryptionKey,
       crawlerTableLevelDepth: props.crawlerTableLevelDepth,
       removalPolicy,
+      permissionModel: props.permissionModel,
+      lakeFormationDataAccessRole: dataAccessRole,
+      lakeFormationConfigurationRole: configurationRole,
     });
 
     this.silverCatalogDatabase = new DataCatalogDatabase(this, 'SilverCatalogDatabase', {
@@ -94,6 +114,9 @@ export class DataLakeCatalog extends TrackedConstruct {
       crawlerLogEncryptionKey: this.crawlerLogEncryptionKey,
       crawlerTableLevelDepth: props.crawlerTableLevelDepth,
       removalPolicy,
+      permissionModel: props.permissionModel,
+      lakeFormationDataAccessRole: dataAccessRole,
+      lakeFormationConfigurationRole: configurationRole,
     });
 
     this.goldCatalogDatabase = new DataCatalogDatabase(this, 'GoldCatalogDatabase', {
@@ -105,6 +128,9 @@ export class DataLakeCatalog extends TrackedConstruct {
       crawlerLogEncryptionKey: this.crawlerLogEncryptionKey,
       crawlerTableLevelDepth: props.crawlerTableLevelDepth,
       removalPolicy,
+      permissionModel: props.permissionModel,
+      lakeFormationDataAccessRole: dataAccessRole,
+      lakeFormationConfigurationRole: configurationRole,
     });
   }
 

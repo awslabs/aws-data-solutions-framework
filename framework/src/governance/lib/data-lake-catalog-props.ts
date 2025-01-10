@@ -5,6 +5,8 @@ import { RemovalPolicy } from 'aws-cdk-lib';
 import { CfnCrawler } from 'aws-cdk-lib/aws-glue';
 import { IKey } from 'aws-cdk-lib/aws-kms';
 import { DataLakeStorage } from '../../storage';
+import { PermissionModel } from '../../utils';
+import { IRole } from 'aws-cdk-lib/aws-iam';
 
 /**
  * Properties for the `DataLakeCatalog` Construct
@@ -54,4 +56,24 @@ export interface DataLakeCatalogProps {
    * @default - The resources are not deleted (`RemovalPolicy.RETAIN`).
    */
   readonly removalPolicy?: RemovalPolicy;
+
+  /**
+   * The permission model to apply to the Glue Database.
+   * @default - IAM permission model is used
+   */
+  readonly permissionModel?: PermissionModel;
+
+  /**
+   * The IAM Role used by Lake Formation for data access.
+   * Only needed when permissionModel is set to Lake Formation or Hybrid
+   * @default - A new role is created for the entire Data Lake
+   */
+  readonly lakeFormationDataAccessRole?: IRole;
+
+  /**
+   * The IAM Role used to perform Lake Formation configuration. 
+   * Only needed when permissionModel is set to Lake Formation or Hybrid
+   * @default - A new role is created for the entire Data Lake
+   */
+  readonly lakeFormationConfigurationRole?: IRole;
 }

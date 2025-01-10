@@ -7,6 +7,7 @@ import { IRole } from 'aws-cdk-lib/aws-iam';
 import { IKey } from 'aws-cdk-lib/aws-kms';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
+import { PermissionModel } from '../../utils';
 
 /**
  * Properties for the `DataCatalogDatabase` construct
@@ -24,8 +25,7 @@ export interface DataCatalogDatabaseProps {
 
   /**
    * Top level location where table data is stored.
-   * The location prefix cannot be empty if the `locationBucket` is set.
-   * The minimal configuration is `/` for the root level in the Bucket.
+   * @default - the root of the bucket is used as the location prefix.
    */
   readonly locationPrefix?: string;
 
@@ -87,4 +87,24 @@ export interface DataCatalogDatabaseProps {
    * @default - The resources are not deleted (`RemovalPolicy.RETAIN`).
    */
   readonly removalPolicy?: RemovalPolicy;
+
+  /**
+   * The permission model to apply to the Glue Database.
+   * @default - IAM permission model is used
+   */
+  readonly permissionModel?: PermissionModel;
+
+  /**
+   * The IAM Role used by Lake Formation for data access.
+   * Only needed when permissionModel is set to Lake Formation or Hybrid
+   * @default - A new role is created
+   */
+  readonly lakeFormationDataAccessRole?: IRole;
+
+  /**
+   * The IAM Role used to perform Lake Formation configuration. 
+   * Only needed when permissionModel is set to Lake Formation or Hybrid
+   * @default - A new role is created
+   */
+  readonly lakeFormationConfigurationRole?: IRole;
 }

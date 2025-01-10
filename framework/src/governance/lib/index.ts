@@ -8,3 +8,4 @@ export * from './data-lake-catalog-props';
 export * from './custom-authorizer-environment-helpers';
 export * from './custom-authorizer-central-helpers';
 export * from './datazone';
+export * from './lake-formation-helpers';

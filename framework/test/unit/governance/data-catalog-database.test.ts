@@ -11,8 +11,10 @@
 import { App, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { DataCatalogDatabase } from '../../../src/governance';
+import { PermissionModel } from '../../../src/utils';
+import { Key } from 'aws-cdk-lib/aws-kms';
 
 describe('DataCatalogDatabase with passed role', () => {
   const app = new App();
@@ -163,7 +165,7 @@ describe('DataCatalogDatabase with multiple org location prefix', () => {
     bucketName: dbBucketName,
   });
 
-  const locationPrefix = '/org1/database/';
+  const locationPrefix = '/org1/database';
   const dbName = 'sample';
   new DataCatalogDatabase(stack, 'database', {
     locationBucket: dbBucket,
@@ -213,7 +215,7 @@ describe('DataCatalogDatabase default construct', () => {
     assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
     roleName: testPrincipalRoleName,
   });
-  const locationPrefix = '/database/';
+  const locationPrefix = '/database';
   const dbName = 'sample';
   const catalogDb = new DataCatalogDatabase(stack, 'database', {
     locationBucket: dbBucket,
@@ -483,7 +485,7 @@ describe('DataCatalogDatabase with disabled crawler', () => {
   const dbBucket = new Bucket(stack, 'dbBucket', {
     bucketName: dbBucketName,
   });
-  const locationPrefix = '/database/';
+  const locationPrefix = '/database';
   const dbName = 'sample';
   new DataCatalogDatabase(stack, 'database', {
     locationBucket: dbBucket,
@@ -520,7 +522,7 @@ describe('DataCatalogDatabase with missing leading slash in the prefix and globa
   const dbBucket = new Bucket(stack, 'dbBucket', {
     bucketName: dbBucketName,
   });
-  const locationPrefix = 'database/';
+  const locationPrefix = 'database';
   const dbName = 'sample';
   new DataCatalogDatabase(stack, 'database', {
     locationBucket: dbBucket,
@@ -609,5 +611,402 @@ describe('DataCatalogDatabase with / as location prefix', () => {
         ]),
       },
     });
+  });
+});
+
+describe('DataCatalogDatabase with Lake Formation permission model', () => {
+  const app = new App();
+  const stack = new Stack(app, 'Stack');
+  const dbBucketName = 'sample-db';
+  const bucketEncryptionKey = new Key(stack, 'bucketKey');
+  const dbBucket = new Bucket(stack, 'dbBucket', {
+    bucketName: dbBucketName,
+    encryption: BucketEncryption.KMS,
+    encryptionKey: bucketEncryptionKey,
+  });
+  const locationPrefix = '/';
+  const dbName = 'sample';
+  new DataCatalogDatabase(stack, 'database', {
+    locationBucket: dbBucket,
+    locationPrefix: locationPrefix,
+    name: dbName,
+    removalPolicy: RemovalPolicy.DESTROY,
+    permissionModel: PermissionModel.LAKE_FORMATION,
+  });
+
+  const template = Template.fromStack(stack);
+  // console.log(JSON.stringify(template.toJSON(), null, 2));
+
+  test('should create correct DataLake settings', () => {
+    template.hasResourceProperties('AWS::LakeFormation::DataLakeSettings', {
+      Admins: [
+        {
+          DataLakePrincipalIdentifier: {
+            "Fn::Sub": Match.stringLikeRegexp(".*role/cdk-.*-cfn-exec-role-.*")
+          }
+        },
+        {
+          DataLakePrincipalIdentifier: {
+            "Fn::GetAtt": [
+              Match.stringLikeRegexp("databaseLfRevokeRole.*"),
+              "Arn"
+            ]
+          }
+        }
+      ],
+      MutationType: "APPEND",
+      Parameters: {
+        "CROSS_ACCOUNT_VERSION": 4
+      }
+    });
+  });
+
+  test('should register the data location', () => {
+    template.hasResourceProperties('AWS::LakeFormation::Resource', {
+      HybridAccessEnabled: false,
+        ResourceArn: {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Fn::GetAtt": [
+                  Match.stringLikeRegexp("dbBucket.*"),
+                  "Arn"
+                ]
+              },
+              "/"
+            ]
+          ]
+        },
+        RoleArn: {
+          "Fn::GetAtt": [
+            Match.stringLikeRegexp("databaseLakeFormationRegistrationDataAccessRole.*"),
+            "Arn"
+          ]
+        },
+        UseServiceLinkedRole: false
+    });
+  });
+
+  test('should revoke IAMAllowedPrincipal via a custom resource', () => {
+    template.hasResourceProperties('Custom::AWS', {
+      ServiceToken: {
+        "Fn::GetAtt": [
+          Match.stringLikeRegexp("AWS.*"),
+          "Arn"
+        ]
+      },
+      Create: "{\"service\":\"LakeFormation\",\"action\":\"RevokePermissions\",\"parameters\":{\"Permissions\":[\"ALL\"],\"Principal\":{\"DataLakePrincipalIdentifier\":\"IAM_ALLOWED_PRINCIPALS\"},\"Resource\":{\"Database\":{\"Name\":\"sample_008d4446\"}}},\"physicalResourceId\":{\"id\":\"sample_008d4446\"}}",
+      InstallLatestAwsSdk: true
+    });
+  });
+
+  test('should grant Lake Formation permissions to the crawler for creating tables', () => {
+    template.hasResourceProperties('AWS::LakeFormation::PrincipalPermissions', {
+      Permissions: [
+          "CREATE_TABLE"
+      ],
+      PermissionsWithGrantOption: [],
+      Principal: {
+        DataLakePrincipalIdentifier: {
+          "Fn::GetAtt": [
+            Match.stringLikeRegexp("databaseCrawlerRole.*"),
+            "Arn"
+          ]
+        }
+      },
+      Resource: {
+        Database: {
+          CatalogId: {
+            Ref: "AWS::AccountId"
+          },
+          Name: Match.stringLikeRegexp("sample_.*")
+        }
+      }
+    });
+  });
+
+  test('should grant Lake Formation permissions to the crawler for creating tables', () => {
+    template.hasResourceProperties('AWS::LakeFormation::PrincipalPermissions', {
+      Permissions: [
+        "SELECT",
+        "DESCRIBE",
+        "ALTER"
+      ],
+      PermissionsWithGrantOption: [],
+      Principal: {
+        DataLakePrincipalIdentifier: {
+          "Fn::GetAtt": [
+            Match.stringLikeRegexp("databaseCrawlerRole.*"),
+            "Arn"
+          ]
+        }
+      },
+      Resource: {
+        Table: {
+          CatalogId: {
+            Ref: "AWS::AccountId"
+          },
+          DatabaseName: Match.stringLikeRegexp("sample_.*"),
+          TableWildcard: {}
+        }
+      }
+    });
+  });
+
+  test('should create a data location permission for the crawler', () => {
+    template.hasResourceProperties('AWS::LakeFormation::PrincipalPermissions', {
+      Permissions: [
+        "DATA_LOCATION_ACCESS"
+      ],
+      PermissionsWithGrantOption: [],
+      Principal: {
+        DataLakePrincipalIdentifier: {
+          "Fn::GetAtt": [
+            Match.stringLikeRegexp("databaseCrawlerRole.*"),
+            "Arn"
+          ]
+        }
+      },
+      Resource: {
+        DataLocation: {
+          CatalogId: {
+            "Ref": "AWS::AccountId"
+          },
+          ResourceArn: {
+            "Fn::Join": [
+              "",
+              [
+                {
+                  "Fn::GetAtt": [
+                    Match.stringLikeRegexp("dbBucket.*"),
+                    "Arn"
+                  ]
+                },
+                "/"
+              ]
+            ]
+          }
+        }
+      }
+    });
+  });
+
+  test('should crate an IAM role for revoking IAMAllowedPrincipals', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Action: "sts:AssumeRole",
+            Effect: "Allow",
+            Principal: {
+              Service: "lambda.amazonaws.com"
+            }
+          }
+        ],
+        Version: "2012-10-17"
+      },
+    });
+  });
+  
+  test('should create lambda function for revoking IAMAllowedPrincipals via the custom resource', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Code: {
+        S3Bucket: {
+          "Fn::Sub": Match.stringLikeRegexp("cdk\-.*\-assets\-.*")
+        },
+        S3Key: Match.stringLikeRegexp(".*.zip")
+      },
+      Handler: "index.handler",
+      Role: {
+        "Fn::GetAtt": [
+          Match.stringLikeRegexp("databaseLfRevokeRole.*"),
+          "Arn"
+        ]
+      },
+      Runtime: {
+        "Fn::FindInMap": [
+          "LatestNodeRuntimeMap",
+          {
+            "Ref": "AWS::Region"
+          },
+          "value"
+        ]
+      },
+      Timeout: 60
+    });
+  });
+
+  test('should create an IAM policy for the revoke custom resource', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+        Statement: [
+          {
+            Action: "lakeformation:RevokePermissions",
+            Effect: "Allow",
+            Resource: {
+              "Fn::Join": [
+                "",
+                [
+                  "arn:",
+                  {
+                    "Ref": "AWS::Partition"
+                  },
+                  ":lakeformation:",
+                  {
+                    "Ref": "AWS::Region"
+                  },
+                  ":",
+                  {
+                    "Ref": "AWS::AccountId"
+                  },
+                  ":catalog:",
+                  {
+                    "Ref": "AWS::AccountId"
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            Action: "glue:GetDatabase",
+            Effect: "Allow",
+            Resource: [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition"
+                    },
+                    ":glue:",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    Match.stringLikeRegexp(":database/sample_.*")
+                  ]
+                ]
+              },
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition"
+                    },
+                    ":glue:",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":catalog"
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+      }),
+      PolicyName: Match.stringLikeRegexp("databaseIamRevokeCustomResourcePolicy.*"),
+      Roles: [
+        {
+          Ref: Match.stringLikeRegexp("databaseLfRevokeRole.*")
+        }
+      ]
+    });
+  });
+
+  test('should create a default data access role', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: Match.objectLike({
+          Statement: [
+            {
+              Action: "sts:AssumeRole",
+              Effect: "Allow",
+              Principal: {
+                Service: "lakeformation.amazonaws.com"
+              }
+            }
+          ],
+        }),
+    });
+  });
+
+  test('should create an IAM policy for the data access role ', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            {
+              Action: [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*"
+              ],
+              Effect: "Allow",
+              Resource: [
+                {
+                  "Fn::GetAtt": [
+                    Match.stringLikeRegexp("dbBucket.*"),
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          Match.stringLikeRegexp("dbBucket.*"),
+                          "Arn"
+                        ]
+                      },
+                      "/"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              Action: [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*"
+              ],
+              Effect: "Allow",
+              Resource: {
+                "Fn::GetAtt": [
+                  Match.stringLikeRegexp("bucketKey.*"),
+                  "Arn"
+                ]
+              }
+            },
+          ]),
+        }),
+        PolicyName: Match.stringLikeRegexp("databaseLakeFormationRegistrationDataAccessRoleDefaultPolicy.*"),
+        Roles: [
+          {
+            Ref: Match.stringLikeRegexp("databaseLakeFormationRegistrationDataAccessRole.*")
+          }
+        ]
+      }
+    );
   });
 });

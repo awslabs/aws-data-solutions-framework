@@ -3,11 +3,14 @@
 
 import { Stack } from 'aws-cdk-lib';
 import { CfnCrawler, CfnDatabase, CfnSecurityConfiguration } from 'aws-cdk-lib/aws-glue';
-import { AddToPrincipalPolicyResult, Effect, IPrincipal, IRole, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { AddToPrincipalPolicyResult, Effect, IPrincipal, IRole, Policy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { IKey, Key } from 'aws-cdk-lib/aws-kms';
+import { CfnDataLakeSettings, CfnPrincipalPermissions, CfnResource } from 'aws-cdk-lib/aws-lakeformation';
+import { AwsCustomResource } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import { DataCatalogDatabaseProps } from './data-catalog-database-props';
-import { Context, TrackedConstruct, TrackedConstructProps, Utils } from '../../utils';
+import { /*grantDataLakeLocation,*/ grantCrawler, grantDataLakeLocation, putDataLakeSettings, registerS3Location, revokeIamAllowedPrincipal } from './lake-formation-helpers';
+import { Context, PermissionModel, TrackedConstruct, TrackedConstructProps, Utils } from '../../utils';
 
 /**
  * An AWS Glue Data Catalog Database configured with the location and a crawler.
@@ -48,9 +51,54 @@ export class DataCatalogDatabase extends TrackedConstruct {
    */
   readonly crawlerLogEncryptionKey?: IKey;
   /**
+   * The DataLakeSettings for Lake Formation
+   */
+  readonly dataLakeSettings?: CfnDataLakeSettings;
+  /**
+   * The IAM Role used by Lake Formation to access data.
+   */
+  readonly lfDataAccessRole?: IRole;
+  /**
+   * The Lake Formation data lake location
+   */
+  readonly dataLakeLocation?: CfnResource;
+  /**
+   * The custom resource for revoking IAM permissions from the database
+   */
+  readonly revokeIamAllowedPrincipal?: AwsCustomResource;
+  /**
+   * The Lake Formation grant on the database for the Crawler when Lake Formation or Hybrid is used
+   */
+  readonly crawlerLfDbGrant?: CfnPrincipalPermissions;
+  /**
+   * The Lake Formation grant on the tables for the Crawler when Lake Formation or Hybrid is used
+   */
+  readonly crawlerLfTablesGrant?: CfnPrincipalPermissions;
+  /**
+   * The Lake Formation grant on the data location for the Crawler when Lake Formation or Hybrid is used
+   */
+  readonly crawlerLfLocationGrant?: CfnPrincipalPermissions;
+  /**
+   * The IAM Role used to revoke LakeFormation IAMAllowedPrincipals
+   */
+  readonly lfRevokeRole?: IRole;
+  /**
+   * The Lake Formation grant on the data location for the CDK role
+   */
+  readonly cdkLfLocationGrant?: CfnPrincipalPermissions;
+  /**
    * Caching constructor properties for internal reuse by constructor methods
    */
   private dataCatalogDatabaseProps: DataCatalogDatabaseProps;
+  /**
+   * The location prefix without trailing slash
+   */
+  private cleanedLocationPrefix?: string;
+  /**
+   * The location S3 URI
+   */
+  private s3LocationUri?: string;
+
 
   constructor(scope: Construct, id: string, props: DataCatalogDatabaseProps) {
     const trackedConstructProps: TrackedConstructProps = {
@@ -70,25 +118,71 @@ export class DataCatalogDatabase extends TrackedConstruct {
     const hash = Utils.generateUniqueHash(this);
     this.databaseName = props.name + '_' + hash.toLowerCase();
 
-    let s3LocationUri: string|undefined, locationPrefix: string|undefined;
-
     if (catalogType === CatalogType.S3) {
-      locationPrefix = props.locationPrefix;
 
-      if (!locationPrefix!.endsWith('/')) {
-        locationPrefix += '/';
+      this.cleanedLocationPrefix = props.locationPrefix === undefined ? '' : props.locationPrefix.replace(/\/$/g, '');
+      this.s3LocationUri = props.locationBucket!.s3UrlForObject(this.cleanedLocationPrefix);
+
+      if (props.permissionModel === PermissionModel.LAKE_FORMATION || props.permissionModel === PermissionModel.HYBRID) {
+
+        const lfAdmins: IRole[]=[];
+        const cdkRole = Utils.getCdkDeploymentRole(this);
+        lfAdmins.push(cdkRole);
+
+        if (props.permissionModel === PermissionModel.LAKE_FORMATION) {
+          // Create a role for the AwsCustomResource to revoke IAMAllowedPrincipal
+          this.lfRevokeRole = props.lakeFormationConfigurationRole || new Role(this, 'LfRevokeRole', {
+            assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+          });
+          lfAdmins.push(this.lfRevokeRole);
+        }
+
+        this.dataLakeSettings = putDataLakeSettings(this, 'DataLakeSettings', lfAdmins);
+
+        // register location
+        if (props.locationBucket) {
+
+          [this.lfDataAccessRole, this.dataLakeLocation] = registerS3Location(
+            this, 'LakeFormationRegistration',
+            props.locationBucket,
+            this.cleanedLocationPrefix,
+            props.permissionModel,
+            props.lakeFormationDataAccessRole,
+          );
+          this.lfDataAccessRole.node.addDependency(this.dataLakeSettings!);
+
+          // this.cdkLfLocationGrant = grantDataLakeLocation(
+          //   this, 'CdkLfLocationGrant',
+          //   this.dataLakeLocation!.resourceArn,
+          //   cdkRole,
+          //   true
+          // );
+          // this.cdkLfLocationGrant.node.addDependency(this.dataLakeLocation!);
+        }
       }
-
-      s3LocationUri = props.locationBucket!.s3UrlForObject(locationPrefix);
     }
 
     this.database = new CfnDatabase(this, 'GlueDatabase', {
       catalogId: Stack.of(this).account,
       databaseInput: {
         name: this.databaseName,
-        locationUri: s3LocationUri,
+        locationUri: this.s3LocationUri,
       },
     });
+    this.database.applyRemovalPolicy(removalPolicy);
+
+    if (catalogType === CatalogType.S3
+      && (props.permissionModel === PermissionModel.LAKE_FORMATION || props.permissionModel === PermissionModel.HYBRID)) {
+
+      // this.database.node.addDependency(this.dataLakeLocation!);
+      // this.database.node.addDependency(this.cdkLfLocationGrant!);
+
+      if (props.permissionModel === PermissionModel.LAKE_FORMATION) {
+
+        this.revokeIamAllowedPrincipal = revokeIamAllowedPrincipal(this, 'IamRevoke', this.databaseName, this.lfRevokeRole!, removalPolicy);
+        this.revokeIamAllowedPrincipal.node.addDependency(this.database);
+      }
+    }
 
     let autoCrawl = props.autoCrawl;
 
@@ -211,12 +305,12 @@ export class DataCatalogDatabase extends TrackedConstruct {
       const crawlerName = `${props.name}-${hash.toLowerCase()}-crawler`;
 
       if (catalogType === CatalogType.S3) {
-        this.crawler = this.handleS3TypeCrawler(props, {
+        [this.crawler, this.crawlerLfDbGrant, this.crawlerLfTablesGrant, this.crawlerLfLocationGrant] = this.handleS3TypeCrawler(props, {
           autoCrawlSchedule,
           crawlerName,
           crawlerSecurityConfigurationName: this.crawlerSecurityConfiguration.name,
-          locationPrefix: locationPrefix!,
-          s3LocationUri: s3LocationUri!,
+          locationPrefix: this.cleanedLocationPrefix!,
+          s3LocationUri: this.s3LocationUri!,
         });
       } else if (catalogType === CatalogType.JDBC) {
         this.crawler = this.handleJDBCTypeCrawler(props, {
@@ -307,12 +401,51 @@ export class DataCatalogDatabase extends TrackedConstruct {
    * @param s3Props `S3CrawlerProps`
    * @returns `CfnCrawler`
    */
-  private handleS3TypeCrawler(props: DataCatalogDatabaseProps, s3Props: S3CrawlerProps): CfnCrawler {
+  private handleS3TypeCrawler(
+    props: DataCatalogDatabaseProps,
+    s3Props: S3CrawlerProps,
+  ): [CfnCrawler, CfnPrincipalPermissions | undefined, CfnPrincipalPermissions | undefined, CfnPrincipalPermissions | undefined] {
+
     const tableLevel = props.crawlerTableLevelDepth || this.calculateDefaultTableLevelDepth(s3Props.locationPrefix);
     const grantPrefix = s3Props.locationPrefix == '/' ? '' : s3Props.locationPrefix;
-    props.locationBucket!.grantRead(this.crawlerRole!, grantPrefix+'*');
 
-    return new CfnCrawler(this, 'DatabaseAutoCrawler', {
+    let useLakeFormation = false;
+    let lfDbGrant: CfnPrincipalPermissions | undefined;
+    let lfTablesGrant: CfnPrincipalPermissions | undefined;
+    let lfLocationGrant: CfnPrincipalPermissions | undefined;
+
+    if (props.permissionModel === PermissionModel.HYBRID || props.permissionModel === PermissionModel.LAKE_FORMATION) {
+      useLakeFormation = true;
+
+      this.crawlerRole!.attachInlinePolicy(new Policy(this, 'CrawlerLfDataAccess', {
+        statements: [
+          new PolicyStatement({
+            effect: Effect.ALLOW,
+            actions: [
+              'lakeformation:GetDataAccess',
+            ],
+            resources: ['*'],
+          }),
+        ],
+      }));
+
+      lfLocationGrant = grantDataLakeLocation(
+        this, 'CrawlerLfLocationGrant',
+        props.locationBucket!.arnForObjects(this.cleanedLocationPrefix || ''),
+        this.crawlerRole!,
+      );
+
+      [lfDbGrant, lfTablesGrant] = grantCrawler(this, 'DbCrawler', this.databaseName, this.crawlerRole!);
+
+      lfLocationGrant.node.addDependency(this.dataLakeLocation!);
+      // lfLocationGrant.node.addDependency(this.cdkLfLocationGrant!);
+      lfDbGrant.node.addDependency(this.database);
+      lfTablesGrant.node.addDependency(this.database);
+    } else {
+      props.locationBucket!.grantRead(this.crawlerRole!, grantPrefix+'*');
+    }
+
+    const crawler = new CfnCrawler(this, 'DatabaseAutoCrawler', {
       role: this.crawlerRole!.roleArn,
       targets: {
         s3Targets: [{
@@ -329,7 +462,19 @@ export class DataCatalogDatabase extends TrackedConstruct {
           TableLevelConfiguration: tableLevel,
         },
       }),
+      lakeFormationConfiguration: {
+        useLakeFormationCredentials: useLakeFormation,
+      },
     });
+    crawler.node.addDependency(this.database);
+
+    if (props.permissionModel === PermissionModel.HYBRID || props.permissionModel === PermissionModel.LAKE_FORMATION) {
+      crawler.node.addDependency(lfDbGrant!);
+      crawler.node.addDependency(lfTablesGrant!);
+      crawler.node.addDependency(lfLocationGrant!);
+    }
+
+    return [crawler, lfDbGrant, lfTablesGrant, lfLocationGrant];
   }
 
   /**
