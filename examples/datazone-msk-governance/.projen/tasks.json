@@ -80,7 +80,7 @@
       "description": "Synthesizes your cdk app into cdk.out and suppresses the template in stdout (part of \"yarn build\")",
       "steps": [
         {
-          "exec": "DOMAIN_ID=2222 DATAZONE_PORTAL_ROLE_NAME=admin npx aws-cdk@2.165.0 synth -q"
+          "exec": "DOMAIN_ID=2222 DATAZONE_PORTAL_ROLE_NAME=admin npx aws-cdk@2.177.0 synth -q"
         }
       ]
     },
