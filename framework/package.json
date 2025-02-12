@@ -50,7 +50,7 @@
     "cdk-nag": "^2.0.0",
     "commit-and-tag-version": "^12",
     "constructs": "10.4.2",
-    "esbuild": "^0.21.0",
+    "esbuild": "^0.25.0",
     "eslint": "^9",
     "eslint-import-resolver-typescript": "^3.6.1",
     "eslint-plugin-import": "^2.29.1",
