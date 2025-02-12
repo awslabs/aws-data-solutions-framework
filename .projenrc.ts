@@ -154,7 +154,7 @@ const fwkProject = new awscdk.AwsCdkConstructLibrary({
     `@aws-cdk/lambda-layer-kubectl-${KUBECTL_LAYER_VERSION}`,
     '@types/eslint',
     'eslint-plugin-local-rules',
-    'esbuild',
+    'esbuild@^0.25.0',
     'sync-request-curl',
     'node-libcurl'
   ],
