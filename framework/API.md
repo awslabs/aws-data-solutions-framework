@@ -60,6 +60,7 @@ new storage.AccessLogsBucket(scope: Construct, id: string, props?: BucketProps)
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addEventNotification">addEventNotification</a></code> | Adds a bucket notification event destination. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addObjectCreatedNotification">addObjectCreatedNotification</a></code> | Subscribes a destination to receive notifications when an object is created in the bucket. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addObjectRemovedNotification">addObjectRemovedNotification</a></code> | Subscribes a destination to receive notifications when an object is removed from the bucket. |
+| <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addReplicationPolicy">addReplicationPolicy</a></code> | Function to add required permissions to the destination bucket for cross account replication. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addToResourcePolicy">addToResourcePolicy</a></code> | Adds a statement to the resource policy for a principal (i.e. account/role/service) to perform actions on this bucket and/or its contents. Use `bucketArn` and `arnForObjects(keys)` to obtain ARNs for this bucket or objects. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.arnForObjects">arnForObjects</a></code> | Returns an ARN that represents all objects within the bucket that match the key pattern specified. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.enableEventBridgeNotification">enableEventBridgeNotification</a></code> | Enables event bridge notification, causing all events below to be sent to EventBridge:. |
@@ -212,6 +213,36 @@ The notification destination (see onEvent).
 - *Type:* ...aws-cdk-lib.aws_s3.NotificationKeyFilter[]
 
 Filters (see onEvent).
+
+---
+
+##### `addReplicationPolicy` <a name="addReplicationPolicy" id="@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addReplicationPolicy"></a>
+
+```typescript
+public addReplicationPolicy(roleArn: string, accessControlTransition?: boolean, account?: string): void
+```
+
+Function to add required permissions to the destination bucket for cross account replication.
+
+These permissions will be added as a resource based policy on the bucket
+
+> [https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-accesscontroltranslation.html](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-accesscontroltranslation.html)
+
+###### `roleArn`<sup>Required</sup> <a name="roleArn" id="@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addReplicationPolicy.parameter.roleArn"></a>
+
+- *Type:* string
+
+---
+
+###### `accessControlTransition`<sup>Optional</sup> <a name="accessControlTransition" id="@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addReplicationPolicy.parameter.accessControlTransition"></a>
+
+- *Type:* boolean
+
+---
+
+###### `account`<sup>Optional</sup> <a name="account" id="@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.addReplicationPolicy.parameter.account"></a>
+
+- *Type:* string
 
 ---
 
@@ -990,6 +1021,7 @@ allow legacy bucket naming style, default is false.
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.property.encryptionKey">encryptionKey</a></code> | <code>aws-cdk-lib.aws_kms.IKey</code> | Optional KMS encryption key associated with this bucket. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.property.isWebsite">isWebsite</a></code> | <code>boolean</code> | If this bucket has been configured for static website hosting. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.property.policy">policy</a></code> | <code>aws-cdk-lib.aws_s3.BucketPolicy</code> | The resource policy associated with this bucket. |
+| <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.property.replicationRoleArn">replicationRoleArn</a></code> | <code>string</code> | Role used to set up permissions on this bucket for replication. |
 
 ---
 
@@ -1159,6 +1191,18 @@ first call to addToResourcePolicy(s).
 
 ---
 
+##### `replicationRoleArn`<sup>Optional</sup> <a name="replicationRoleArn" id="@cdklabs/aws-data-solutions-framework.storage.AccessLogsBucket.property.replicationRoleArn"></a>
+
+```typescript
+public readonly replicationRoleArn: string;
+```
+
+- *Type:* string
+
+Role used to set up permissions on this bucket for replication.
+
+---
+
 
 ### AnalyticsBucket <a name="AnalyticsBucket" id="@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket"></a>
 
@@ -1231,6 +1275,7 @@ new storage.AnalyticsBucket(scope: Construct, id: string, props: AnalyticsBucket
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addEventNotification">addEventNotification</a></code> | Adds a bucket notification event destination. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addObjectCreatedNotification">addObjectCreatedNotification</a></code> | Subscribes a destination to receive notifications when an object is created in the bucket. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addObjectRemovedNotification">addObjectRemovedNotification</a></code> | Subscribes a destination to receive notifications when an object is removed from the bucket. |
+| <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addReplicationPolicy">addReplicationPolicy</a></code> | Function to add required permissions to the destination bucket for cross account replication. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addToResourcePolicy">addToResourcePolicy</a></code> | Adds a statement to the resource policy for a principal (i.e. account/role/service) to perform actions on this bucket and/or its contents. Use `bucketArn` and `arnForObjects(keys)` to obtain ARNs for this bucket or objects. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.arnForObjects">arnForObjects</a></code> | Returns an ARN that represents all objects within the bucket that match the key pattern specified. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.enableEventBridgeNotification">enableEventBridgeNotification</a></code> | Enables event bridge notification, causing all events below to be sent to EventBridge:. |
@@ -1383,6 +1428,36 @@ The notification destination (see onEvent).
 - *Type:* ...aws-cdk-lib.aws_s3.NotificationKeyFilter[]
 
 Filters (see onEvent).
+
+---
+
+##### `addReplicationPolicy` <a name="addReplicationPolicy" id="@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addReplicationPolicy"></a>
+
+```typescript
+public addReplicationPolicy(roleArn: string, accessControlTransition?: boolean, account?: string): void
+```
+
+Function to add required permissions to the destination bucket for cross account replication.
+
+These permissions will be added as a resource based policy on the bucket
+
+> [https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-accesscontroltranslation.html](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-accesscontroltranslation.html)
+
+###### `roleArn`<sup>Required</sup> <a name="roleArn" id="@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addReplicationPolicy.parameter.roleArn"></a>
+
+- *Type:* string
+
+---
+
+###### `accessControlTransition`<sup>Optional</sup> <a name="accessControlTransition" id="@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addReplicationPolicy.parameter.accessControlTransition"></a>
+
+- *Type:* boolean
+
+---
+
+###### `account`<sup>Optional</sup> <a name="account" id="@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.addReplicationPolicy.parameter.account"></a>
+
+- *Type:* string
 
 ---
 
@@ -2161,6 +2236,7 @@ allow legacy bucket naming style, default is false.
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.property.encryptionKey">encryptionKey</a></code> | <code>aws-cdk-lib.aws_kms.IKey</code> | Optional KMS encryption key associated with this bucket. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.property.isWebsite">isWebsite</a></code> | <code>boolean</code> | If this bucket has been configured for static website hosting. |
 | <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.property.policy">policy</a></code> | <code>aws-cdk-lib.aws_s3.BucketPolicy</code> | The resource policy associated with this bucket. |
+| <code><a href="#@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.property.replicationRoleArn">replicationRoleArn</a></code> | <code>string</code> | Role used to set up permissions on this bucket for replication. |
 
 ---
 
@@ -2327,6 +2403,18 @@ The resource policy associated with this bucket.
 
 If `autoCreatePolicy` is true, a `BucketPolicy` will be created upon the
 first call to addToResourcePolicy(s).
+
+---
+
+##### `replicationRoleArn`<sup>Optional</sup> <a name="replicationRoleArn" id="@cdklabs/aws-data-solutions-framework.storage.AnalyticsBucket.property.replicationRoleArn"></a>
+
+```typescript
+public readonly replicationRoleArn: string;
+```
+
+- *Type:* string
+
+Role used to set up permissions on this bucket for replication.
 
 ---
 
