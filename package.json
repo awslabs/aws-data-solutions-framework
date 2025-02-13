@@ -29,8 +29,8 @@
     "constructs": "^10.0.0",
     "glob": "^10.3.6",
     "lerna": "8.1.9",
-    "lerna-projen": "0.1.524",
-    "projen": "0.90.5",
+    "lerna-projen": "0.1.562",
+    "projen": "0.91.9",
     "ts-node": "^10.9.2",
     "typescript": "5.5.4"
   },

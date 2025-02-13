@@ -7,7 +7,7 @@ import { globSync } from 'glob';
 
 const CDK_VERSION = '2.165.0';
 const CDK_CONSTRUCTS_VERSION = '10.4.2';
-const JSII_VERSION = '~5.5.0';
+const JSII_VERSION = '~5.6.0';
 const KUBECTL_LAYER_VERSION='v30';
 
 const repositoryUrl = 'https://github.com/awslabs/data-solutions-framework-on-aws.git';
