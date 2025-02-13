@@ -289,7 +289,7 @@
       },
       "steps": [
         {
-          "exec": "npx npm-check-updates@16 --upgrade --target=minor --peer --no-deprecated --dep=dev,peer,prod,optional --filter=@aws-cdk/lambda-layer-kubectl-v30,@jest/globals,@types/eslint,@types/jest,@types/node,esbuild,eslint-import-resolver-typescript,eslint-plugin-import,eslint-plugin-local-rules,jest,jest-runner-groups,jsii-diff,jsii-pacmak,node-libcurl,rosetta,sync-request-curl,ts-jest,typescript,@types/js-yaml,@types/semver,js-yaml,semver,simple-base"
+          "exec": "npx npm-check-updates@16 --upgrade --target=minor --peer --no-deprecated --dep=dev,peer,prod,optional --filter=@aws-cdk/lambda-layer-kubectl-v30,@jest/globals,@types/eslint,@types/jest,@types/node,eslint-import-resolver-typescript,eslint-plugin-import,eslint-plugin-local-rules,jest,jest-runner-groups,jsii-diff,jsii-pacmak,node-libcurl,rosetta,sync-request-curl,ts-jest,typescript,@types/js-yaml,@types/semver,js-yaml,semver,simple-base"
         },
         {
           "exec": "yarn install --check-files"

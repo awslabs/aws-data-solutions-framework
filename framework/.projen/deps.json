@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "@aws-cdk/cli-lib-alpha",
-      "version": "2.165.0-alpha.0",
+      "version": "2.177.0-alpha.0",
       "type": "build"
     },
     {
@@ -52,6 +52,7 @@
     },
     {
       "name": "esbuild",
+      "version": "^0.25.0",
       "type": "build"
     },
     {
@@ -149,7 +150,7 @@
     },
     {
       "name": "aws-cdk-lib",
-      "version": "^2.165.0",
+      "version": "^2.177.0",
       "type": "peer"
     },
     {
